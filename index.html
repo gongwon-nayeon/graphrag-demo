@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphRAG 실시간 시각화 데모</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #F5C842;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .left-panel {
+            flex: 0 0 420px;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .right-panel {
+            flex: 1;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #D97706;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #D97706;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #D97706;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(217, 119, 6, 0.4);
+            background: #B45309;
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .answer-section {
+            margin-top: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .answer-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #D97706;
+        }
+
+        .answer-label {
+            font-weight: 600;
+            color: #D97706;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .answer-content {
+            color: #333;
+            line-height: 1.8;
+            font-size: 14px;
+        }
+
+        .answer-content h1, .answer-content h2, .answer-content h3 {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: #D97706;
+        }
+
+        .answer-content h1 { font-size: 20px; }
+        .answer-content h2 { font-size: 18px; }
+        .answer-content h3 { font-size: 16px; }
+
+        .answer-content ul, .answer-content ol {
+            margin-left: 20px;
+            margin-bottom: 12px;
+        }
+
+        .answer-content li {
+            margin-bottom: 4px;
+        }
+
+        .answer-content p {
+            margin-bottom: 12px;
+        }
+
+        .answer-content a {
+            color: #D97706;
+            text-decoration: none;
+            border-bottom: 1px solid #D97706;
+        }
+
+        .answer-content a:hover {
+            color: #B45309;
+            border-bottom-color: #B45309;
+        }
+
+        .answer-content code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .answer-content pre {
+            background: #f5f5f5;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 12px;
+        }
+
+        .answer-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .answer-content strong {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .answer-content blockquote {
+            border-left: 4px solid #D97706;
+            padding-left: 12px;
+            margin: 12px 0;
+            color: #666;
+            font-style: italic;
+        }
+
+        .info-box {
+            background: #FEF3C7;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #92400E;
+        }
+
+        .graph-container {
+            flex: 1;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fafafa;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #mynetwork {
+            width: 100%;
+            height: 100%;
+        }
+
+        .loading {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 40px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #D97706;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            font-size: 11px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend:hover {
+            box-shadow: 0 3px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .legend.collapsed {
+            padding: 8px 15px;
+            gap: 8px;
+        }
+
+        .legend.collapsed .legend-details {
+            display: none;
+        }
+
+        .legend-toggle {
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .legend-details {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-divider {
+            height: 20px;
+            width: 1px;
+            background: #ddd;
+        }
+
+        .node-info-panel {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.98);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            font-size: 13px;
+            z-index: 100;
+            max-width: 400px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .node-info-panel.active {
+            display: block;
+        }
+
+        .node-info-title {
+            font-weight: 700;
+            font-size: 15px;
+            color: #333;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #D97706;
+            padding-bottom: 8px;
+        }
+
+        .node-info-item {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .node-info-key {
+            font-weight: 600;
+            color: #555;
+            display: inline-block;
+            min-width: 100px;
+        }
+
+        .node-info-value {
+            color: #333;
+            word-break: break-word;
+        }
+
+        .close-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            font-size: 20px;
+            color: #999;
+            transition: color 0.2s;
+        }
+
+        .close-panel:hover {
+            color: #333;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        .example-queries {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            transition: opacity 0.3s, max-height 0.3s;
+            overflow: hidden;
+        }
+
+        .example-queries.hidden {
+            opacity: 0;
+            max-height: 0;
+            padding: 0;
+            margin: 0;
+        }
+
+        .example-queries h3 {
+            font-size: 13px;
+            color: #D97706;
+            margin-bottom: 8px;
+        }
+
+        .example-query {
+            font-size: 12px;
+            color: #555;
+            padding: 6px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .example-query:hover {
+            background: #FEF3C7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 좌측 패널: 채팅 UI -->
+        <div class="left-panel">
+            <h1>🔍 GraphRAG Demo</h1>
+            <p class="subtitle">네이버 뉴스 기사를 기반으로 답변하는 AI 챗봇입니다</p>
+
+            <div class="input-group">
+                <textarea
+                    id="question"
+                    rows="4"
+                    placeholder="질문을 입력하세요"
+                ></textarea>
+            </div>
+
+            <button id="askButton" onclick="askQuestion()">🚀 검색하기</button>
+
+            <div class="example-queries" id="exampleQueries">
+                <h3>💡 예시 질문</h3>
+                <div class="example-query" onclick="setQuestion('정치 카테고리의 최신 뉴스 알려줘')">
+                    • 정치 카테고리의 최신 뉴스 알려줘
+                </div>
+                <div class="example-query" onclick="setQuestion('삼성전자 관련 기사 찾아줘')">
+                    • 삼성전자 관련 기사 찾아줘
+                </div>
+                <div class="example-query" onclick="setQuestion('경제 분야 최신 뉴스는?')">
+                    • 경제 분야 최신 뉴스는?
+                </div>
+            </div>
+
+            <div class="answer-section">
+                <div id="answerBox" style="display: none;">
+                    <div class="answer-box">
+                        <div class="answer-label">📝 답변</div>
+                        <div class="answer-content" id="answer"></div>
+                    </div>
+                    <div class="info-box" id="infoBox"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측 패널: 그래프 시각화 -->
+        <div class="right-panel">
+            <div class="graph-container">
+                <div id="mynetwork"></div>
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <div style="text-align: center; color: #D97706; font-weight: 600;">
+                        검색 중...
+                    </div>
+                </div>
+                <div class="legend" id="legend" onclick="toggleLegend()">
+                    <span class="legend-toggle">
+                        <span style="display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: #667eea; color: white; text-align: center; line-height: 18px; font-size: 12px; font-weight: bold;">?</span>
+                    </span>
+                    <div class="legend-details">
+                        <div class="legend-section">
+                            <span style="font-weight: 600; color: #555;">노드:</span>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #97C2FC;"></div>
+                                <span>Article</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #FFAB91;"></div>
+                                <span>Category</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #A5D6A7;"></div>
+                                <span>Content</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #CE93D8;"></div>
+                                <span>Media</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="node-info-panel" id="nodeInfoPanel">
+                    <span class="close-panel" onclick="closeNodeInfo()">×</span>
+                    <div class="node-info-title" id="nodeInfoTitle">노드 정보</div>
+                    <div id="nodeInfoContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let network;
+        let nodes;
+        let edges;
+        let allNodesData = [];
+        let allEdgesData = [];
+
+        // 페이지 로드 시 그래프 초기화
+        window.onload = async function() {
+            await initGraph();
+        };
+
+        async function initGraph() {
+            try {
+                const response = await fetch('/graph');
+                const data = await response.json();
+
+                allNodesData = data.nodes;
+                allEdgesData = data.edges;
+
+                // vis.js 데이터셋 생성
+                const nodesArray = allNodesData.map(node => ({
+                    id: node.id,
+                    label: node.title.substring(0, 25) + (node.title.length > 25 ? '...' : ''),
+                    title: `${node.label}: ${node.title}`,
+                    color: {
+                        background: '#E0E0E0',
+                        border: '#BDBDBD'
+                    },
+                    font: { size: 12, color: '#757575' },
+                    shape: 'dot',
+                    size: 15
+                }));
+
+                const edgesArray = allEdgesData.map(edge => ({
+                    id: edge.id,
+                    from: edge.source,
+                    to: edge.target,
+                    label: '',
+                    arrows: 'to',
+                    color: { color: '#E0E0E0', highlight: '#FF6B6B' },
+                    width: 1,
+                    font: { size: 9, color: '#999' }
+                }));
+
+                nodes = new vis.DataSet(nodesArray);
+                edges = new vis.DataSet(edgesArray);
+
+                const container = document.getElementById('mynetwork');
+                const graphData = { nodes: nodes, edges: edges };
+
+                const options = {
+                    physics: {
+                        enabled: true,
+                        barnesHut: {
+                            gravitationalConstant: -8000,
+                            springConstant: 0.04,
+                            springLength: 95
+                        },
+                        stabilization: {
+                            iterations: 200
+                        }
+                    },
+                    interaction: {
+                        hover: true,
+                        tooltipDelay: 100,
+                        zoomView: true,
+                        dragView: true
+                    },
+                    nodes: {
+                        borderWidth: 2,
+                        shadow: true
+                    },
+                    edges: {
+                        width: 2,
+                        shadow: true,
+                        smooth: {
+                            type: 'continuous'
+                        }
+                    }
+                };
+
+                network = new vis.Network(container, graphData, options);
+
+                // 노드 클릭 이벤트
+                network.on('click', function(params) {
+                    if (params.nodes.length > 0) {
+                        const nodeId = params.nodes[0];
+                        showNodeInfo(nodeId);
+                    } else {
+                        closeNodeInfo();
+                    }
+                });
+
+                console.log('✅ Graph initialized with', nodesArray.length, 'nodes and', edgesArray.length, 'edges');
+            } catch (error) {
+                console.error('Graph initialization failed:', error);
+                alert('그래프를 불러오는데 실패했습니다: ' + error.message);
+            }
+        }
+
+        function getNodeColor(label) {
+            const colors = {
+                'Article': '#97C2FC',
+                'Category': '#FFAB91',
+                'Content': '#A5D6A7',
+                'Media': '#CE93D8'
+            };
+            return colors[label] || '#DDDDDD';
+        }
+
+        function setQuestion(query) {
+            document.getElementById('question').value = query;
+        }
+
+        async function askQuestion() {
+            const question = document.getElementById('question').value.trim();
+            if (!question) {
+                alert('질문을 입력해주세요!');
+                return;
+            }
+
+            // 예시 질문 숨기기
+            document.getElementById('exampleQueries').classList.add('hidden');
+
+            // UI 업데이트
+            document.getElementById('askButton').disabled = true;
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('answerBox').style.display = 'none';
+
+            // 모든 노드/엣지를 기본 상태로 리셋
+            resetGraph();
+
+            try {
+                const response = await fetch('/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // 답변 표시 (마크다운 렌더링)
+                const answerElement = document.getElementById('answer');
+                answerElement.innerHTML = marked.parse(data.answer);
+
+                document.getElementById('infoBox').innerHTML = `
+                    <strong>🔧 사용된 Retriever:</strong> ${data.retriever_used}
+                `;
+                document.getElementById('answerBox').style.display = 'block';
+
+                // 그래프 하이라이트
+                highlightSubgraph(data.used_nodes, data.used_edges);
+            } catch (error) {
+                console.error('Query failed:', error);
+                alert('검색에 실패했습니다: ' + error.message);
+            } finally {
+                document.getElementById('askButton').disabled = false;
+                document.getElementById('loading').classList.remove('active');
+            }
+        }
+
+        function resetGraph() {
+            if (!nodes || !edges) return;
+
+            // 모든 노드를 회색으로
+            const allNodes = nodes.get();
+            allNodes.forEach(node => {
+                nodes.update({
+                    id: node.id,
+                    color: {
+                        background: '#E0E0E0',
+                        border: '#BDBDBD'
+                    },
+                    borderWidth: 2,
+                    size: 15,
+                    font: { size: 12, color: '#757575' }
+                });
+            });
+
+            // 모든 엣지를 회색으로
+            const allEdges = edges.get();
+            allEdges.forEach(edge => {
+                edges.update({
+                    id: edge.id,
+                    color: { color: '#E0E0E0' },
+                    width: 1,
+                    label: ''
+                });
+            });
+        }
+
+        // 하이라이트된 Article 노드와 연결된 Category 노드 찾기
+        function findConnectedCategories(articleNodeIds) {
+            const connectedCategoryIds = [];
+
+            allEdgesData.forEach(edge => {
+                // Article -> Category 연결 (BELONGS_TO)
+                if (edge.relationship === 'BELONGS_TO') {
+                    // source가 하이라이트된 Article인 경우
+                    if (articleNodeIds.includes(edge.source)) {
+                        const targetNode = allNodesData.find(n => n.id === edge.target);
+                        if (targetNode && targetNode.label === 'Category') {
+                            connectedCategoryIds.push(edge.target);
+                        }
+                    }
+                    // target이 하이라이트된 Article인 경우 (방향이 반대일 수 있음)
+                    if (articleNodeIds.includes(edge.target)) {
+                        const sourceNode = allNodesData.find(n => n.id === edge.source);
+                        if (sourceNode && sourceNode.label === 'Category') {
+                            connectedCategoryIds.push(edge.source);
+                        }
+                    }
+                }
+            });
+
+            return [...new Set(connectedCategoryIds)]; // 중복 제거
+        }
+
+        // 하이라이트된 Content 노드와 연결된 Article 노드 찾기
+        function findConnectedArticles(contentNodeIds) {
+            const connectedArticleIds = [];
+
+            allEdgesData.forEach(edge => {
+                // Article -> Content 연결 (HAS_CHUNK)
+                if (edge.relationship === 'HAS_CHUNK') {
+                    // source가 Article이고 target이 하이라이트된 Content인 경우
+                    if (contentNodeIds.includes(edge.target)) {
+                        const sourceNode = allNodesData.find(n => n.id === edge.source);
+                        if (sourceNode && sourceNode.label === 'Article') {
+                            connectedArticleIds.push(edge.source);
+                        }
+                    }
+                    // 방향이 반대일 수 있음
+                    if (contentNodeIds.includes(edge.source)) {
+                        const targetNode = allNodesData.find(n => n.id === edge.target);
+                        if (targetNode && targetNode.label === 'Article') {
+                            connectedArticleIds.push(edge.target);
+                        }
+                    }
+                }
+            });
+
+            return [...new Set(connectedArticleIds)]; // 중복 제거
+        }
+
+        function highlightSubgraph(nodeIds, edgeIds) {
+            if (!nodes || !edges) return;
+
+            console.log('Highlighting nodes:', nodeIds);
+            console.log('Highlighting edges:', edgeIds);
+
+            const matchedNodeIds = [];
+
+            // 노드 매칭
+            const allNodes = nodes.get();
+            nodeIds.forEach(searchId => {
+                // ElementId_ 형식: Neo4j elementId로 직접 매칭
+                if (searchId.startsWith('ElementId_')) {
+                    const elementId = searchId.replace('ElementId_', '');
+                    allNodes.forEach(node => {
+                        if (node.id === elementId) {
+                            matchedNodeIds.push(node.id);
+                        }
+                    });
+                    return;
+                }
+
+                // 기존 형식: "Article_ART_366_0001124550" 또는 "Category_정치"
+                allNodes.forEach(node => {
+                    const nodeData = allNodesData.find(n => n.id === node.id);
+                    if (!nodeData) return;
+
+                    const parts = searchId.split('_');
+                    const searchLabel = parts[0];
+                    const searchValue = parts.slice(1).join('_');
+
+                    if (nodeData.label !== searchLabel) return;
+
+                    let valueMatches = false;
+                    if (nodeData.properties) {
+                        if (searchLabel === 'Article' && nodeData.properties.article_id === searchValue) {
+                            valueMatches = true;
+                        } else if (searchLabel === 'Category' && nodeData.properties.name === searchValue) {
+                            valueMatches = true;
+                        } else if (searchLabel === 'Content' && nodeData.properties.content_id === searchValue) {
+                            valueMatches = true;
+                        } else if (searchLabel === 'Media' && nodeData.properties.name === searchValue) {
+                            valueMatches = true;
+                        }
+                    }
+
+                    if (valueMatches) {
+                        matchedNodeIds.push(node.id);
+                    }
+                });
+            });
+// HAS_CHUNK 엣지가 있는 경우: Content 노드와 연결된 Article 노드도 추가
+            if (edgeIds.includes('HAS_CHUNK')) {
+                const contentNodeIds = matchedNodeIds.filter(id => {
+                    const node = allNodesData.find(n => n.id === id);
+                    return node && node.label === 'Content';
+                });
+                const connectedArticleIds = findConnectedArticles(contentNodeIds);
+                connectedArticleIds.forEach(artId => {
+                    if (!matchedNodeIds.includes(artId)) {
+                        matchedNodeIds.push(artId);
+                    }
+                });
+            }
+
+            // BELONGS_TO 엣지가 있는 경우: Article 노드와 연결된 Category 노드도 추가
+            if (edgeIds.includes('BELONGS_TO')) {
+                const articleNodeIds = matchedNodeIds.filter(id => {
+                    const node = allNodesData.find(n => n.id === id);
+                    return node && node.label === 'Article';
+                });
+                const connectedCategoryIds = findConnectedCategories(articleNodeIds);
+                connectedCategoryIds.forEach(catId => {
+                    if (!matchedNodeIds.includes(catId)) {
+                        matchedNodeIds.push(catId);
+                    }
+                });
+            }
+
+            console.log('Final matched nodes:', matchedNodeIds);
+
+            // 노드 하이라이트
+            matchedNodeIds.forEach(id => {
+                const nodeData = allNodesData.find(n => n.id === id);
+                const originalColor = getNodeColor(nodeData?.label);
+                nodes.update({
+                    id: id,
+                    color: {
+                        background: originalColor,
+                        border: '#C92A2A'
+                    },
+                    borderWidth: 4,
+                    size: 25,
+                    font: { size: 14, color: '#000' }
+                });
+            });
+
+            // 엣지 하이라이트 (양쪽 노드가 모두 활성화된 엣지만)
+            if (matchedNodeIds.length > 0) {
+                const allEdges = edges.get();
+                allEdges.forEach(edge => {
+                    const edgeData = allEdgesData.find(e => e.id === edge.id);
+                    if (!edgeData) return;
+
+                    const sourceActivated = matchedNodeIds.includes(edgeData.source);
+                    const targetActivated = matchedNodeIds.includes(edgeData.target);
+
+                    if (sourceActivated && targetActivated) {
+                        const shouldHighlight = edgeIds.length === 0 || edgeIds.includes(edgeData.relationship);
+                        if (shouldHighlight) {
+                            edges.update({
+                                id: edge.id,
+                                color: { color: '#FF6B6B' },
+                                width: 3,
+                                label: edgeData.relationship
+                            });
+                        }
+                    }
+                });
+            }
+
+            // 하이라이트된 노드로 포커스
+            if (matchedNodeIds.length > 0) {
+                network.fit({
+                    nodes: matchedNodeIds,
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            }
+        }
+
+        function showNodeInfo(nodeId) {
+            const nodeData = allNodesData.find(n => n.id === nodeId);
+            if (!nodeData) return;
+
+            const panel = document.getElementById('nodeInfoPanel');
+            const title = document.getElementById('nodeInfoTitle');
+            const content = document.getElementById('nodeInfoContent');
+
+            title.innerHTML = `<span style="color: ${getNodeColor(nodeData.label)};">●</span> ${nodeData.label}: ${nodeData.title}`;
+
+            let html = '';
+            if (nodeData.properties) {
+                for (const [key, value] of Object.entries(nodeData.properties)) {
+                    // embedding 속성은 숨김
+                    if (key === 'embedding' || key === 'embeddings') {
+                        continue;
+                    }
+
+                    if (value && value !== '') {
+                        let displayValue = value;
+                        // URL은 클릭 가능하게
+                        if (key === 'url' && typeof value === 'string' && value.startsWith('http')) {
+                            displayValue = `<a href="${value}" target="_blank" style="color: #D97706; text-decoration: none;">${value}</a>`;
+                        }
+                        // 긴 텍스트는 줄바꿈
+                        else if (typeof value === 'string' && value.length > 100) {
+                            displayValue = value.substring(0, 100) + '...';
+                        }
+
+                        html += `
+                            <div class="node-info-item">
+                                <span class="node-info-key">${key}:</span>
+                                <span class="node-info-value">${displayValue}</span>
+                            </div>
+                        `;
+                    }
+                }
+            }
+
+            if (html === '') {
+                html = '<div style="color: #999;">속성 정보가 없습니다.</div>';
+            }
+
+            content.innerHTML = html;
+            panel.classList.add('active');
+        }
+
+        function closeNodeInfo() {
+            document.getElementById('nodeInfoPanel').classList.remove('active');
+        }
+
+        function toggleLegend() {
+            const legend = document.getElementById('legend');
+            legend.classList.toggle('collapsed');
+        }
+    </script>
+</body>
+</html>

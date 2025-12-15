@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+neo4j-graphrag
+openai
+pydantic
